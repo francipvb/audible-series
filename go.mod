@@ -1,4 +1,4 @@
-module testproj
+module audible-series
 
 go 1.23.1
 
