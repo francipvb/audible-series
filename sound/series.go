@@ -8,71 +8,58 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
-type SoundSeries struct {
-	Values    []float64
-	PanRange  float64
-	Wave      WaveForm
-	Generator SoundGenerator
-	Volume    float64
+type ValueRange interface {
+	MinValue(nValues int) float64
+	MaxValue(nValues int) float64
+	Values(nValues int) []float64
 }
 
-func (s *SoundSeries) Min(nLast int) float64 {
-	if len(s.Values) < nLast {
-		return slices.Min(s.Values)
-	}
-	return slices.Min(s.Values[len(s.Values)-nLast:])
+type SoundSeries interface {
+	ValueRange
+	Generate(minFreq, maxFreq, minValue, maxValue float64, nValues int, duration time.Duration, generator SoundGenerator) (beep.Streamer, error)
 }
 
-func (s *SoundSeries) Max(nLast int) float64 {
-	if len(s.Values) < nLast {
-		return slices.Max(s.Values)
-	}
-	return slices.Max(s.Values[len(s.Values)-nLast:])
+type rawSeries struct {
+	values []float64
 }
 
-func (s *SoundSeries) Generate(minFreq, maxFreq, minValue, maxValue float64, nValues int, duration time.Duration) (beep.Streamer, error) {
-	var tones []beep.Streamer
+func (rs *rawSeries) Values(nValues int) []float64 {
 	var values []float64
-	if len(s.Values) < nValues {
-		// Fill with NaN values before the values we have in the series
-		for i := 0; i < nValues-len(s.Values); i++ {
+	numValues := len(rs.values)
+	if numValues < nValues {
+		for i := 0; i < nValues-numValues; i++ {
 			values = append(values, math.NaN())
 		}
-		values = append(values, s.Values...)
+		values = append(values, rs.values...)
 	} else {
-		values = s.Values[len(s.Values)-nValues:]
+		values = rs.values[numValues-nValues:]
 	}
-
-	for _, v := range values {
-		freq := calculateFreq(minValue, maxValue, minFreq, maxFreq, v)
-		// Avoid very high and very low freqs:
-		freqDelta := maxFreq - minFreq
-		if freq > maxFreq {
-			freq = maxFreq + freqDelta*0.05
-		} else if freq < minFreq {
-			freq = minFreq - freqDelta*0.05
-		}
-		var tone beep.Streamer
-		var err error
-		if math.IsNaN(v) {
-			tone, err = s.Generator.Generate(SilenceWave, 0, duration, s.PanRange, s.Volume)
-		} else {
-			tone, err = s.Generator.Generate(s.Wave, freq, duration, s.PanRange, s.Volume)
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		tones = append(tones, tone)
-	}
-
-	return beep.Seq(tones...), nil
+	return values
 }
 
-func calculateFreq(minValue, maxValue, minFreq, maxFreq, v float64) float64 {
-	valueDelta, freqDelta := maxValue-minValue, maxFreq-minFreq
-	if valueDelta == 0 {
-		return minFreq
-	}
-	return minFreq + (freqDelta/valueDelta)*(v-minValue)
+type dynamicRangeSeries struct {
+	rawSeries
 }
+
+func (s *dynamicRangeSeries) MinValue(nLast int) float64 {
+	if len(s.values) < nLast {
+		return slices.Min(s.values)
+	}
+	return slices.Min(s.values[len(s.values)-nLast:])
+}
+
+func (s *dynamicRangeSeries) MaxValue(nLast int) float64 {
+	if len(s.values) < nLast {
+		return slices.Max(s.values)
+	}
+	return slices.Max(s.values[len(s.values)-nLast:])
+}
+
+type fixedRangeSeries struct {
+	rawSeries
+	minValue float64
+	maxValue float64
+}
+
+func (f *fixedRangeSeries) MinValue(nValues int) float64 { return f.minValue }
+func (f *fixedRangeSeries) MaxValue(nValues int) float64 { return f.maxValue }

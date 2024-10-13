@@ -28,3 +28,7 @@ func (pc *PlaybackController) Generator() *SoundGenerator {
 func (pc *PlaybackController) PlayAndWait(s ...beep.Streamer) {
 	speaker.PlayAndWait(s...)
 }
+
+func (pc *PlaybackController) SampleRate() beep.SampleRate {
+	return pc.sr
+}
