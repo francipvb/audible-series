@@ -1,4 +1,10 @@
-from .chart import AudibleChart, AudibleChartWindow, AudibleSeries, AudibleSeriesWindow
+from .chart import (
+    AudibleChart,
+    AudibleChartWindow,
+    AudibleSeries,
+    AudibleSeriesWindow,
+    SeriesConfig,
+)
 from .generators import AbstractToneGenerator, AudioBuffer, SineToneGenerator
 from .player import AudioPlayer
 from .render import AbstractDataRenderer, PitchDataRenderer
@@ -26,4 +32,5 @@ __all__ = [
     "AudibleSeries",
     "AudibleSeriesWindow",
     "AudioPlayer",
+    "SeriesConfig",
 ]

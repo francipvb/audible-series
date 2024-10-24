@@ -1,52 +1,33 @@
 from __future__ import annotations
 
-from datetime import timedelta
-from functools import cached_property
-from typing import Iterator, Literal, overload
 import warnings
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import timedelta
+from functools import cached_property
+from typing import Any, Hashable, Iterator, Literal, overload
 
 import numpy as np
 import pandas as pd
+
 from audible_plot.generators import AudioBuffer
 from audible_plot.player import AudioPlayer
 from audible_plot.render import AbstractDataRenderer
-from audible_plot.utils import AbstractValueRange, DynamicValueRange, FixedRange
+from audible_plot.utils import AbstractValueRange, DynamicValueRange
 
 
 class AudibleSeries(Sequence[float]):
     def __init__(
         self,
-        data: Sequence[float]
-        | np.ndarray[tuple[int], np.dtypes.Float64DType]
-        | pd.Series,
+        data: pd.Series,
         renderer: AbstractDataRenderer,
-        name: str | None = None,
         value_range: AbstractValueRange | None = None,
-        *,
-        is_extra: bool = False,
     ) -> None:
-        if isinstance(data, np.ndarray):
-            self._data = data
-        else:
-            self._data = np.fromiter(data, np.dtypes.Float64DType)
-        if not name:
-            if isinstance(data, pd.Series):
-                self._name = data.name
-            else:
-                raise TypeError("Name is required for non-series input.")
-        else:
-            self._name = name
+        self._data = data
 
-        if value_range:
-            self._value_range = value_range
-        else:
-            if is_extra:
-                raise TypeError("Value range must be specified for extra series.")
-            self._value_range = None
+        self._value_range = value_range
 
         self._renderer = renderer
-        self._is_extra = is_extra
         self._chart = None
 
     @property
@@ -64,8 +45,8 @@ class AudibleSeries(Sequence[float]):
         self._chart = value
 
     @property
-    def name(self):
-        return str(self._name)
+    def key(self):
+        return self._data.name
 
     @property
     def value_range(self) -> AbstractValueRange | None:
@@ -83,8 +64,8 @@ class AudibleSeries(Sequence[float]):
     def __len__(self) -> int:
         return len(self._data)
 
-    def window(self, start: int, end: int) -> AudibleSeriesWindow:
-        return AudibleSeriesWindow(self, start, end)
+    def window(self, position: slice) -> AudibleSeriesWindow:
+        return AudibleSeriesWindow(self, position)
 
     @property
     def renderer(self):
@@ -92,16 +73,14 @@ class AudibleSeries(Sequence[float]):
 
     @property
     def is_extra(self):
-        return self._is_extra
+        return self.value_range is not None
 
 
 class AudibleSeriesWindow(Sequence[float]):
-    def __init__(self, series: AudibleSeries, start: int, end: int) -> None:
+    def __init__(self, series: AudibleSeries, position: slice) -> None:
         self._series = series
-        self._values = series[start:end]
-
-        self._start = start
-        self._end = end
+        self._values = series[position]
+        self._position = position
 
     @property
     def value_range(self) -> AbstractValueRange:
@@ -121,8 +100,8 @@ class AudibleSeriesWindow(Sequence[float]):
         return len(self._values)
 
     @property
-    def name(self) -> str:
-        return self._series.name
+    def name(self):
+        return self._series.key
 
     @property
     def is_extra(self):
@@ -133,68 +112,80 @@ class AudibleSeriesWindow(Sequence[float]):
         return self._series.renderer
 
 
+@dataclass(kw_only=True, frozen=True)
+class SeriesConfig:
+    renderer: AbstractDataRenderer
+    range: AbstractValueRange | None = None
+    key: Hashable
+
+
 class AudibleChart:
     def __init__(
         self,
         *,
-        series: Sequence[AudibleSeries],
-        min_freq: float,
-        max_freq: float,
+        data: pd.DataFrame | np.ndarray[Any, Any] | Sequence[Sequence[int | float]],
+        config: Sequence[SeriesConfig] = [],
     ) -> None:
-        self._series: dict[str, AudibleSeries] = {}
-        self._len = max(len(s) for s in list(series))
-        for item in series:
-            if item.name in self._series:
-                warnings.warn(
-                    f"Series with name {item.name!r} is being added twice. Note that this will replace the previous one."
+        match data:
+            case np.ndarray(shape=shape) | pd.DataFrame(shape=shape) if len(shape) != 2:
+                raise TypeError(
+                    "Only two-dimensional NumPY arrays and pandas dataframes are supported."
                 )
-            if len(item) != self._len:
-                raise ValueError(f"Series {item.name!r} is not of length {self._len}.")
-            self._series[item.name] = item
-            item.chart = self
-        self._freq_range = FixedRange(min_freq, max_freq)
+            case np.ndarray():
+                data = pd.DataFrame(data)
+            case _:
+                data = pd.DataFrame(data)
+
+        if len(config) > len(data.columns):
+            raise TypeError(
+                "Config list length is greather than the number of data columns."
+            )
+        self._data = data
         self._player = AudioPlayer()
+        self._config = config
 
     @property
     def player(self):
         return self._player
 
-    def window(self, start: int, end: int) -> AudibleChartWindow:
-        return AudibleChartWindow(
-            series=list(self._series.values()),
-            start=start,
-            end=end,
-            player=self._player,
-        )
+    @property
+    def series(self) -> list[AudibleSeries]:
+        parsed_keys: set[Hashable] = set()
+        series_dict = {}
+        for config in self._config:
+            if config.key in parsed_keys:
+                warnings.warn(
+                    f"The key {config.key!r} is already present in the series list and will be replaced."
+                )
+            series = AudibleSeries(
+                data=self._data[config.key],
+                renderer=config.renderer,
+                value_range=config.range,
+            )
+            series.chart = self
+            series_dict[config.key] = series
+        return list(series_dict.values())
+
+    def window(self, window_bounds: slice | None = None) -> AudibleChartWindow:
+        window_bounds = window_bounds or slice(None, None)
+        return AudibleChartWindow(self, window_bounds)
 
     @property
     def extra(self):
-        return {
-            name: series for name, series in self._series.items() if not series.is_extra
-        }
+        return {series.key: series for series in self.series if not series.is_extra}
 
     @property
     def related(self):
-        return {
-            name: series for name, series in self._series.items() if series.is_extra
-        }
+        return {series.key: series for series in self.series if series.is_extra}
 
 
-class AudibleChartWindow(Mapping[str, AudibleSeriesWindow]):
-    def __init__(
-        self,
-        series: list[AudibleSeries],
-        start: int,
-        end: int,
-        player: AudioPlayer,
-    ) -> None:
-        self._series = {data.name: data.window(start, end) for data in series}
-        self._start = start
-        self._end = end
-        self._player = player
+class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
+    def __init__(self, chart: AudibleChart, position: slice) -> None:
+        self._series = {data.key: data.window(position) for data in chart.series}
+        self._player = chart.player
 
     @property
-    def extra(self) -> Mapping[str, AudibleSeriesWindow]:
+    def extra(self) -> Mapping[Hashable, AudibleSeriesWindow]:
         return {
             name: window for name, window in self._series.items() if window.is_extra
         }
@@ -219,15 +210,18 @@ class AudibleChartWindow(Mapping[str, AudibleSeriesWindow]):
         }
 
     def render(
-        self, name: str | Literal["all"] = "all", position: slice | int | None = None
+        self,
+        name: Hashable | Literal["all"] = "all",
+        position: slice | int | None = None,
+        duration: timedelta = timedelta(seconds=0.5),
     ) -> AudioBuffer:
         if name == "all":
-            return self._render_all(position)
+            return self._render_all(duration, position)
         else:
-            return self._render_single(name, position)
+            return self._render_single(duration, name, position)
 
     def _render_single(
-        self, name: str, position: int | slice | None = None
+        self, duration: timedelta, name: Hashable, position: int | slice | None = None
     ) -> AudioBuffer:
         if position is None:
             position = slice(None, None)
@@ -242,13 +236,17 @@ class AudibleChartWindow(Mapping[str, AudibleSeriesWindow]):
         return series.renderer.render_values(
             value_list=series[position],
             value_range=value_range,
-            duration=timedelta(seconds=0.5),
+            duration=duration,
         )
 
-    def _render_all(self, position: slice | int | None = None) -> AudioBuffer:
+    def _render_all(
+        self,
+        duration: timedelta,
+        position: slice | int | None = None,
+    ) -> AudioBuffer:
         sample: AudioBuffer | None = None
-        for series in self._series:
-            rendered = self._render_single(series, position)
+        for name in self._series:
+            rendered = self._render_single(duration, name, position)
             if sample is None:
                 sample = rendered
             else:
@@ -262,15 +260,24 @@ class AudibleChartWindow(Mapping[str, AudibleSeriesWindow]):
             return sample / sample_max
         return sample
 
-    def play(self, name: str | Literal["all"], position: int | slice | None = None):
-        sample = self.render(name, position)
+    def play(
+        self,
+        name: Hashable | Literal["all"] = "all",
+        position: int | slice | None = None,
+        duration: timedelta = timedelta(seconds=0.5),
+    ):
+        sample = self.render(
+            name,
+            position,
+            duration,
+        )
         self._player.play_raw(sample)
 
-    def __getitem__(self, key: str) -> AudibleSeriesWindow:
+    def __getitem__(self, key: Hashable) -> AudibleSeriesWindow:
         return self._series[key]
 
     def __len__(self) -> int:
         return len(self._series)
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[Hashable]:
         return iter(self._series)
