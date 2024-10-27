@@ -5,16 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Francisco Del Roio", email = "francipvb@hotmail.com" }]
 requires-python = ">=3.12"
-dependencies = [
-    "numpy>=2.1.2",
-    "pandas>=2.2.3",
-    "pyaudio>=0.2.14",
-    "scipy>=1.14.1",
-    "wxpython>=4.2.2",
-]
+dependencies = ["numpy>=2.1.2", "pandas>=2.2.3", "pyaudio>=0.2.14"]
 
-[project.scripts]
-audible-series = "audible_series:main"
+[project.optional-dependencies]
+wx = ["audible-plot-wx"]
+qt = ["audible-plot-qt"]
 
 [build-system]
 requires = ["hatchling"]
@@ -22,6 +17,13 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = ["ipykernel>=6.29.5", "pytest>=8.3.3", "ruff>=0.6.9"]
+
+[tool.uv.workspace]
+members = ["libs/*"]
+
+[tool.uv.sources]
+audible-plot-wx = { workspace = true }
+audible-plot-qt = { workspace = true }
 
 
 [tool.pyright]

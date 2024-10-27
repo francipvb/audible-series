@@ -178,6 +178,9 @@ class AudibleChart:
     def related(self):
         return {series.key: series for series in self.series if series.is_extra}
 
+    def __len__(self) -> int:
+        return len(self._data)
+
 
 class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
     def __init__(self, chart: AudibleChart, position: slice) -> None:
