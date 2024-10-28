@@ -45,6 +45,7 @@ class ChartSlice(QObject):
 
 class SeriesWindowBackend(QObject):
     nameChanged = Signal()
+    sizeChanged = Signal()
 
     def __init__(
         self,
@@ -67,6 +68,15 @@ class SeriesWindowBackend(QObject):
     @Slot()
     def play(self):
         return self._chart_window.play_by_key(self._window.key)
+
+    def get_size(self) -> int:
+        return len(self._window)
+
+    size = Property(int, get_size, notify=sizeChanged)  # type: ignore
+
+    @Slot(int, result=float)
+    def at(self, pos: int) -> float:
+        return float(self._window[pos])
 
 
 class ChartWindowBackend(QAbstractListModel):
@@ -109,9 +119,13 @@ class ChartWindowBackend(QAbstractListModel):
     def play(self):
         return self._window.play()
 
+    @Slot(int, result=SeriesWindowBackend)
+    def getByPosition(self, pos: int):
+        return self._series[pos]
+
 
 class ChartBackend(QObject):
-    sliceChanged = Signal()
+    onSliceChanged = Signal(ChartSlice, name="sliceChanged")
 
     def __init__(
         self,
@@ -130,7 +144,7 @@ class ChartBackend(QObject):
         self._set_slice(initial_slice)
         self._window = None
 
-    @Property(ChartSlice, notify=sliceChanged)  # type: ignore
+    @Property(ChartSlice, notify=onSliceChanged)  # type: ignore
     def slice(self):  # type: ignore
         return self._slice
 
@@ -142,16 +156,16 @@ class ChartBackend(QObject):
         else:
             self._slice = ChartSlice(slice_)
         self._window = None
-        self.sliceChanged.emit()
+        self.onSliceChanged.emit(self._slice)
 
-    @Property(QObject, notify=sliceChanged)  # type: ignore
+    @Property(QObject, notify=onSliceChanged)  # type: ignore
     def window(self):
         if not self._window:
             self._window = ChartWindowBackend(self._chart.window(self.slice.slice))  # type: ignore
         return self._window
 
     @Slot()
-    def move_left(self):
+    def moveLeft(self):
         current_slice: slice = self.slice.slice  # type: ignore
         if current_slice.start == 0:
             return
@@ -162,7 +176,7 @@ class ChartBackend(QObject):
         self._set_slice(new_slice)
 
     @Slot()
-    def move_right(self):
+    def moveRight(self):
         current_slice: slice = self.slice.slice  # type: ignore
         if current_slice.stop == len(self._chart):
             return

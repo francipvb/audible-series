@@ -74,9 +74,16 @@ def build_chart():
 def main():
     app = QApplication(sys.argv)
     engine = QQmlApplicationEngine()
+
+    def handle_warnings(warnings):
+        for warning in warnings:
+            print(warning.toString())  # Imprime los errores en stdout
+
+    engine.warnings.connect(handle_warnings)
     qml_file = qml_dir / "Main.qml"
     backend = ChartBackend(build_chart())
     engine.rootContext().setContextProperty("backend", backend)
+    engine.setOutputWarningsToStandardError
     engine.load(QUrl(qml_file.as_uri()))
 
     sys.exit(app.exec())

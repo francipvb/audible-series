@@ -94,7 +94,7 @@ class AudibleSeriesWindow(Sequence[float]):
     def __getitem__(self, idx: slice) -> Sequence[float]: ...
 
     def __getitem__(self, idx: int | slice) -> float | Sequence[float]:
-        return self._values[idx]
+        return self._values.iloc[idx]
 
     def __len__(self) -> int:
         return len(self._values)

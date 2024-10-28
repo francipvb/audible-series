@@ -5,7 +5,7 @@
       "name": "Depurador de Python: Archivo actual",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}"
+      "program": "${file}",
       "args": ["--verbose"]
     }
   ]
