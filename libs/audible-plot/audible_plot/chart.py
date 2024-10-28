@@ -100,7 +100,7 @@ class AudibleSeriesWindow(Sequence[float]):
         return len(self._values)
 
     @property
-    def name(self):
+    def key(self):
         return self._series.key
 
     @property
@@ -192,6 +192,10 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
         return {
             name: window for name, window in self._series.items() if window.is_extra
         }
+
+    @property
+    def series(self):
+        return list(self._series.values())
 
     @cached_property
     def value_range(self):

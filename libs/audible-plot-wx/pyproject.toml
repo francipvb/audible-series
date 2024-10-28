@@ -3,11 +3,9 @@ name = "audible-plot-wx"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Francisco Del Roio", email = "francipvb@hotmail.com" } 
-]
+authors = [{ name = "Francisco Del Roio", email = "francipvb@hotmail.com" }]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["wxpython>=4.2.0", "audible-plot"]
 
 [project.scripts]
 audible-plot-wx = "audible_plot_wx:main"
