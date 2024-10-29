@@ -5,7 +5,7 @@ from .chart import (
     AudibleSeriesWindow,
     SeriesConfig,
 )
-from .generators import AbstractToneGenerator, AudioBuffer, SineToneGenerator
+from .generators import AudioBuffer, ToneGenerator
 from .player import AudioPlayer
 from .render import AbstractDataRenderer, PitchDataRenderer
 from .utils import (
@@ -24,9 +24,8 @@ __all__ = [
     "concat_samples",
     "AbstractDataRenderer",
     "PitchDataRenderer",
-    "AbstractToneGenerator",
     "AudioBuffer",
-    "SineToneGenerator",
+    "ToneGenerator",
     "AudibleChart",
     "AudibleChartWindow",
     "AudibleSeries",

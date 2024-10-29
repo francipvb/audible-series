@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import timedelta
 from typing import Sequence
 
-from audible_plot.generators import AbstractToneGenerator, AudioBuffer
+from audible_plot.generators import AudioBuffer, ToneGenerator
 from audible_plot.utils import (
     AbstractValueRange,
     ValueMapper,
@@ -38,7 +38,7 @@ class PitchDataRenderer(AbstractDataRenderer):
     def __init__(
         self,
         frequency_range: AbstractValueRange,
-        generator: AbstractToneGenerator,
+        generator: ToneGenerator,
         max_limit_perc: float = 0.1,
         sample_rate: float = 44100,
         enable_transitions: bool = False,
@@ -61,23 +61,14 @@ class PitchDataRenderer(AbstractDataRenderer):
         value_range: AbstractValueRange,
         duration: timedelta,
     ) -> AudioBuffer:
-        if self._old_value is None:
-            self._old_value = value
         mapper = ValueMapper(value_range, self._freq_range, self._max_limit_perc)
-        if self._enable_transitions:
-            start_freq = mapper.map_value(self._old_value)
-        else:
-            start_freq = mapper.map_value(value)
-        end_freq = mapper.map_value(value)
-        self._old_value = value
 
         return adjust_volume(
             pan_audio(
                 self._generator.generate_wave(
                     sample_rate=self._sample_rate,
                     duration=duration,
-                    freq_start=start_freq,
-                    freq_end=end_freq,
+                    freq_points=[mapper.map_value(value)],
                 ),
                 self._pan,
             ),
@@ -90,5 +81,18 @@ class PitchDataRenderer(AbstractDataRenderer):
         value_range: AbstractValueRange,
         duration: timedelta,
     ) -> AudioBuffer:
-        self._old_value = None
-        return super().render_values(value_list, value_range, duration)
+        if not self._enable_transitions:
+            return super().render_values(value_list, value_range, duration)
+        mapper = ValueMapper(value_range, self._freq_range, self._max_limit_perc)
+        mapped_values = [mapper.map_value(value) for value in value_list]
+        return adjust_volume(
+            buffer=pan_audio(
+                buffer=self._generator.generate_wave(
+                    sample_rate=self._sample_rate,
+                    duration=duration,
+                    freq_points=mapped_values,
+                ),
+                pan=self._pan,
+            ),
+            volume=self._volume,
+        )

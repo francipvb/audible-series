@@ -16,7 +16,7 @@ from audible_plot.render import AbstractDataRenderer
 from audible_plot.utils import AbstractValueRange, DynamicValueRange
 
 
-class AudibleSeries(Sequence[float]):
+class AudibleSeries:
     def __init__(
         self,
         data: pd.Series,
@@ -56,9 +56,9 @@ class AudibleSeries(Sequence[float]):
     def __getitem__(self, idx: int) -> float: ...
 
     @overload
-    def __getitem__(self, idx: slice) -> Sequence[float]: ...
+    def __getitem__(self, idx: slice) -> pd.Series: ...
 
-    def __getitem__(self, idx: slice | int) -> float | Sequence[float]:
+    def __getitem__(self, idx: slice | int) -> float | pd.Series:
         return self._data[idx]  # type: ignore
 
     def __len__(self) -> int:
@@ -76,7 +76,7 @@ class AudibleSeries(Sequence[float]):
         return self.value_range is not None
 
 
-class AudibleSeriesWindow(Sequence[float]):
+class AudibleSeriesWindow:
     def __init__(self, series: AudibleSeries, position: slice) -> None:
         self._series = series
         self._values = series[position]
@@ -86,14 +86,14 @@ class AudibleSeriesWindow(Sequence[float]):
     def value_range(self) -> AbstractValueRange:
         if self._series.value_range is not None:
             return self._series.value_range
-        return DynamicValueRange(self._values)
+        return DynamicValueRange(list(self._values))
 
     @overload
     def __getitem__(self, idx: int) -> float: ...
     @overload
-    def __getitem__(self, idx: slice) -> Sequence[float]: ...
+    def __getitem__(self, idx: slice) -> pd.Series: ...
 
-    def __getitem__(self, idx: int | slice) -> float | Sequence[float]:
+    def __getitem__(self, idx: int | slice) -> float | pd.Series:
         return self._values.iloc[idx]
 
     def __len__(self) -> int:
@@ -241,7 +241,7 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
             value_range = self.value_range
 
         return series.renderer.render_values(
-            value_list=series[position],
+            value_list=list(series[position]),
             value_range=value_range,
             duration=duration,
         )
