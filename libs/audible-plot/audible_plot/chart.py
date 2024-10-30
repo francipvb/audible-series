@@ -12,7 +12,7 @@ import pandas as pd
 
 from audible_plot.generators import AudioBuffer
 from audible_plot.player import AudioPlayer
-from audible_plot.render import AbstractDataRenderer
+from audible_plot.render import AbstractDataRenderer, SilentRenderer
 from audible_plot.utils import AbstractValueRange, DynamicValueRange
 
 
@@ -125,6 +125,7 @@ class AudibleChart:
         *,
         data: pd.DataFrame | np.ndarray[Any, Any] | Sequence[Sequence[int | float]],
         config: Sequence[SeriesConfig] = [],
+        sample_rate: float = 44100,
     ) -> None:
         match data:
             case np.ndarray(shape=shape) | pd.DataFrame(shape=shape) if len(shape) != 2:
@@ -142,7 +143,15 @@ class AudibleChart:
             )
         self._data = data
         self._player = AudioPlayer()
-        self._config = config
+        self._config = {}
+        for item in config:
+            if item.key in self._config:
+                warnings.warn(
+                    f"Duplicate config key for {item.key!r}. The config will be replaced."
+                )
+            self._config[item.key] = item
+
+        self._sample_rate = sample_rate
 
     @property
     def player(self):
@@ -150,25 +159,22 @@ class AudibleChart:
 
     @property
     def series(self) -> list[AudibleSeries]:
-        parsed_keys: set[Hashable] = set()
-        series_dict = {}
-        for config in self._config:
-            if config.key in parsed_keys:
-                warnings.warn(
-                    f"The key {config.key!r} is already present in the series list and will be replaced."
+        def _map_series(series: pd.Series):
+            config = self._config.get(series.name)
+            if config is None:
+                config = SeriesConfig(
+                    key=series.name,
+                    range=None,
+                    renderer=SilentRenderer(),
                 )
-            series = AudibleSeries(
-                data=self._data[config.key],
-                renderer=config.renderer,
-                value_range=config.range,
-            )
-            series.chart = self
-            series_dict[config.key] = series
-        return list(series_dict.values())
+
+            return AudibleSeries(series, config.renderer, config.range)
+
+        return [_map_series(self._data[series]) for series in self._data.keys()]
 
     def window(self, window_bounds: slice | None = None) -> AudibleChartWindow:
         window_bounds = window_bounds or slice(None, None)
-        return AudibleChartWindow(self, window_bounds)
+        return AudibleChartWindow(self, window_bounds, self._sample_rate)
 
     @property
     def extra(self):
@@ -183,9 +189,15 @@ class AudibleChart:
 
 
 class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
-    def __init__(self, chart: AudibleChart, position: slice) -> None:
+    def __init__(
+        self,
+        chart: AudibleChart,
+        position: slice,
+        sample_rate: float,
+    ) -> None:
         self._series = {data.key: data.window(position) for data in chart.series}
         self._player = chart.player
+        self._sample_rate = sample_rate
 
     @property
     def extra(self) -> Mapping[Hashable, AudibleSeriesWindow]:
@@ -244,6 +256,7 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
             value_list=list(series[position]),
             value_range=value_range,
             duration=duration,
+            sample_rate=self._sample_rate,
         )
 
     def _render_all(
