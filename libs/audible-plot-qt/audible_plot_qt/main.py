@@ -28,22 +28,22 @@ def build_chart():
 
     # Renderer objects are used to generate audio samples from values:
     sine_renderer = ap.PitchDataRenderer(
-        freq_range,
-        ap.ToneGenerator(),
+        frequency_range=freq_range,
+        generator=ap.ToneGenerator(),
         volume=0.5,
         pan=-0.3,
         enable_transitions=True,
     )
     cosine_renderer = ap.PitchDataRenderer(
-        freq_range,
-        ap.ToneGenerator(),
+        frequency_range=freq_range,
+        generator=ap.ToneGenerator(),
         volume=0.5,
         pan=0.3,
         enable_transitions=True,
     )
     values_renderer = ap.PitchDataRenderer(
-        freq_range,
-        ap.ToneGenerator(),
+        frequency_range=freq_range,
+        generator=ap.ToneGenerator(),
         volume=0.5,
     )
     return ap.AudibleChart(
@@ -68,6 +68,7 @@ def build_chart():
                 range=func_range,
             ),
         ],
+        frequency_range=freq_range,
     )
 
 

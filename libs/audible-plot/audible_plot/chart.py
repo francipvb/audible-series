@@ -126,6 +126,7 @@ class AudibleChart:
         data: pd.DataFrame | np.ndarray[Any, Any] | Sequence[Sequence[int | float]],
         config: Sequence[SeriesConfig] = [],
         sample_rate: float = 44100,
+        frequency_range: AbstractValueRange,
     ) -> None:
         match data:
             case np.ndarray(shape=shape) | pd.DataFrame(shape=shape) if len(shape) != 2:
@@ -152,6 +153,7 @@ class AudibleChart:
             self._config[item.key] = item
 
         self._sample_rate = sample_rate
+        self._frequency_range = frequency_range
 
     @property
     def player(self):
@@ -187,6 +189,10 @@ class AudibleChart:
     def __len__(self) -> int:
         return len(self._data)
 
+    @property
+    def frequency_range(self):
+        return self._frequency_range
+
 
 class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
     def __init__(
@@ -198,6 +204,7 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
         self._series = {data.key: data.window(position) for data in chart.series}
         self._player = chart.player
         self._sample_rate = sample_rate
+        self._freq_range = chart.frequency_range
 
     @property
     def extra(self) -> Mapping[Hashable, AudibleSeriesWindow]:
@@ -257,6 +264,7 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
             value_range=value_range,
             duration=duration,
             sample_rate=self._sample_rate,
+            frequency_range=self._freq_range,
         )
 
     def _render_all(

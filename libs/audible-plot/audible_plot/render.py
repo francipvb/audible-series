@@ -21,6 +21,7 @@ class AbstractDataRenderer(ABC):
         value_range: AbstractValueRange,
         duration: timedelta,
         sample_rate: float,
+        frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
         raise NotImplementedError
 
@@ -30,14 +31,16 @@ class AbstractDataRenderer(ABC):
         value_range: AbstractValueRange,
         duration: timedelta,
         sample_rate: float,
+        frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
         return concat_samples(
             *list(
                 self.render(
-                    value,
-                    value_range,
-                    duration,
-                    sample_rate,
+                    value=value,
+                    value_range=value_range,
+                    duration=duration,
+                    sample_rate=sample_rate,
+                    frequency_range=frequency_range,
                 )
                 for value in value_list
             ),
@@ -48,7 +51,8 @@ class AbstractDataRenderer(ABC):
 class PitchDataRenderer(AbstractDataRenderer):
     def __init__(
         self,
-        frequency_range: AbstractValueRange,
+        *,
+        frequency_range: AbstractValueRange | None = None,
         generator: ToneGenerator,
         max_limit_perc: float = 0.1,
         enable_transitions: bool = False,
@@ -70,12 +74,15 @@ class PitchDataRenderer(AbstractDataRenderer):
         value_range: AbstractValueRange,
         duration: timedelta,
         sample_rate: float,
+        frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
-        mapper = ValueMapper(value_range, self._freq_range, self._max_limit_perc)
+        # If we have a locally defined frequency range, just ignore the provided one
+        freq_range = self._freq_range or frequency_range
+        mapper = ValueMapper(value_range, freq_range, self._max_limit_perc)
 
         return adjust_volume(
             pan_audio(
-                self._generator.generate_wave(
+                self._generator.generate_sliding(
                     sample_rate=sample_rate,
                     duration=duration,
                     freq_points=[mapper.map_value(value)],
@@ -91,18 +98,31 @@ class PitchDataRenderer(AbstractDataRenderer):
         value_range: AbstractValueRange,
         duration: timedelta,
         sample_rate: float,
+        frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
-        if not self._enable_transitions:
-            return super().render_values(value_list, value_range, duration, sample_rate)
-        mapper = ValueMapper(value_range, self._freq_range, self._max_limit_perc)
+        freq_range = self._freq_range or frequency_range
+        mapper = ValueMapper(value_range, freq_range, self._max_limit_perc)
+        # Duplicate the first value to ensure it is rendered correctly:
+        value_list = list(value_list)
+        if self._enable_transitions:
+            value_list.insert(0, value_list[0])
         mapped_values = [mapper.map_value(value) for value in value_list]
+        if self._enable_transitions:
+            sample = self._generator.generate_sliding(
+                sample_rate=sample_rate,
+                duration=duration,
+                freq_points=mapped_values,
+            )
+        else:
+            sample = self._generator.generate_fixed(
+                sample_rate=sample_rate,
+                duration=duration,
+                freq_points=mapped_values,
+            )
+
         return adjust_volume(
             buffer=pan_audio(
-                buffer=self._generator.generate_wave(
-                    sample_rate=sample_rate,
-                    duration=duration,
-                    freq_points=mapped_values,
-                ),
+                buffer=sample,
                 pan=self._pan,
             ),
             volume=self._volume,
@@ -119,5 +139,6 @@ class SilentRenderer(AbstractDataRenderer):
         value_range: AbstractValueRange,
         duration: timedelta,
         sample_rate: float,
+        frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
         return np.zeros((int(duration.total_seconds() * sample_rate), 2))  # type: ignore
