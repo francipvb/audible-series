@@ -1,0 +1,5 @@
+# Packages from the workspace, just for conda environment
+-e libs/audible-plot
+-e libs/audible-plot-qt
+-e libs/audible-plot-wx
+ccxt
