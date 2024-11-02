@@ -22,6 +22,7 @@ class AudibleSeries:
         data: pd.Series,
         renderer: AbstractDataRenderer,
         value_range: AbstractValueRange | None = None,
+        is_extra: bool = False,
     ) -> None:
         self._data = data
 
@@ -29,6 +30,7 @@ class AudibleSeries:
 
         self._renderer = renderer
         self._chart = None
+        self._is_extra = is_extra or value_range is not None
 
     @property
     def chart(self) -> AudibleChart:
@@ -73,7 +75,13 @@ class AudibleSeries:
 
     @property
     def is_extra(self):
-        return self.value_range is not None
+        return self._is_extra
+
+    def __str__(self) -> str:
+        return str(self.key)
+
+    def __repr__(self) -> str:
+        return f"AudibleSeries({self})"
 
 
 class AudibleSeriesWindow:
@@ -117,6 +125,7 @@ class SeriesConfig:
     renderer: AbstractDataRenderer
     range: AbstractValueRange | None = None
     key: Hashable
+    is_extra: bool = False
 
 
 class AudibleChart:
@@ -168,9 +177,16 @@ class AudibleChart:
                     key=series.name,
                     range=None,
                     renderer=SilentRenderer(),
+                    # This is to avoid a bad range usage from the chart
+                    is_extra=True,
                 )
 
-            return AudibleSeries(series, config.renderer, config.range)
+            return AudibleSeries(
+                data=series,
+                renderer=config.renderer,
+                value_range=config.range,
+                is_extra=config.is_extra,
+            )
 
         return [_map_series(self._data[series]) for series in self._data.keys()]
 
@@ -237,14 +253,30 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
 
     def render(
         self,
-        name: Hashable | Literal["all"] = "all",
+        names: Hashable | Sequence[Hashable] | Literal["all"] = "all",
         position: slice | int | None = None,
         duration: timedelta = timedelta(seconds=0.5),
     ) -> AudioBuffer:
-        if name == "all":
-            return self._render_all(duration, position)
-        else:
-            return self._render_single(duration, name, position)
+        if names == "all":
+            names = [w.key for w in self.series]
+        elif not isinstance(names, (tuple, list, set)):
+            names = [names]
+
+        sample: AudioBuffer | None = None
+        for name in names:
+            rendered = self._render_single(duration, name, position)
+            if sample is None:
+                sample = rendered
+            else:
+                sample = sample + rendered  # type: ignore
+
+        if sample is None:
+            return np.ndarray((0, 2), np.float64)
+
+        sample_max = np.max(np.abs(sample))
+        if sample_max > 1:
+            return sample / sample_max
+        return sample
 
     def _render_single(
         self, duration: timedelta, name: Hashable, position: int | slice | None = None
@@ -267,35 +299,14 @@ class AudibleChartWindow(Mapping[Hashable, AudibleSeriesWindow]):
             frequency_range=self._freq_range,
         )
 
-    def _render_all(
-        self,
-        duration: timedelta,
-        position: slice | int | None = None,
-    ) -> AudioBuffer:
-        sample: AudioBuffer | None = None
-        for name in self._series:
-            rendered = self._render_single(duration, name, position)
-            if sample is None:
-                sample = rendered
-            else:
-                sample = sample + rendered  # type: ignore
-
-        if sample is None:
-            return np.ndarray((0, 2), np.float64)
-
-        sample_max = np.max(np.abs(sample))
-        if sample_max > 1:
-            return sample / sample_max
-        return sample
-
     def play(
         self,
-        name: Hashable | Literal["all"] = "all",
+        names: Hashable | Sequence[Hashable] | Literal["all"] = "all",
         position: int | slice | None = None,
         duration: timedelta = timedelta(seconds=0.5),
     ):
         sample = self.render(
-            name,
+            names,
             position,
             duration,
         )
