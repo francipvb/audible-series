@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Sequence
+from typing import Callable, Sequence
 
 from audible_plot.generators import AudioBuffer, ToneGenerator
 from audible_plot.utils import (
@@ -142,3 +143,33 @@ class SilentRenderer(AbstractDataRenderer):
         frequency_range: AbstractValueRange,
     ) -> AudioBuffer:
         return np.zeros((int(duration.total_seconds() * sample_rate), 2))  # type: ignore
+
+
+@dataclass(kw_only=True, frozen=True)
+class ConditionalRenderer(AbstractDataRenderer):
+    condition: Callable[[float], bool]
+    renderer: AbstractDataRenderer
+    else_renderer: AbstractDataRenderer | None = None
+    mapper: Callable[[float], float] | None = None
+
+    def render(
+        self,
+        value: float,
+        value_range: AbstractValueRange,
+        duration: timedelta,
+        sample_rate: float,
+        frequency_range: AbstractValueRange,
+    ) -> AudioBuffer:
+        if self.condition(value):
+            if self.mapper:
+                value = self.mapper(value)
+            else:
+                # Pass the value as is
+                pass
+            renderer = self.renderer
+        else:
+            renderer = self.else_renderer or SilentRenderer()
+
+        return renderer.render(
+            value, value_range, duration, sample_rate, frequency_range
+        )

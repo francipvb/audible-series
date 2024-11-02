@@ -7,7 +7,12 @@ from .chart import (
 )
 from .generators import AudioBuffer, ToneGenerator
 from .player import AudioPlayer
-from .render import AbstractDataRenderer, PitchDataRenderer
+from .render import (
+    AbstractDataRenderer,
+    PitchDataRenderer,
+    ConditionalRenderer,
+    SilentRenderer,
+)
 from .utils import (
     AbstractValueRange,
     DynamicValueRange,
@@ -32,4 +37,6 @@ __all__ = [
     "AudibleSeriesWindow",
     "AudioPlayer",
     "SeriesConfig",
+    "ConditionalRenderer",
+    "SilentRenderer",
 ]
