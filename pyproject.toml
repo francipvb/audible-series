@@ -5,7 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Francisco Del Roio", email = "francipvb@hotmail.com" }]
 requires-python = ">=3.12"
-dependencies = ["audible-plot", "audible-plot-qt", "audible-plot-wx"]
+dependencies = [
+    "audible-plot",
+    "audible-plot-qt",
+    "audible-plot-wx",
+    # Required by pandas-ta library
+    "numpy<2.0.0",
+    "pandas-ta>=0.3.14b0",
+]
 
 [tool.uv]
 dev-dependencies = ["ipykernel>=6.29.5", "pytest>=8.3.3", "ruff>=0.6.9"]
