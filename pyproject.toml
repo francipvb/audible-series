@@ -9,6 +9,7 @@ dependencies = [
     "audible-plot",
     "audible-plot-qt",
     "audible-plot-wx",
+    "ccxt>=4.4.26",
     # Required by pandas-ta library
     "numpy<2.0.0",
     "pandas-ta>=0.3.14b0",
@@ -24,6 +25,7 @@ members = ["libs/*"]
 audible-plot = { workspace = true }
 audible-plot-wx = { workspace = true }
 audible-plot-qt = { workspace = true }
+pandas-ta = { git = "https://github.com/twopirllc/pandas-ta" }
 
 [tool.pyright]
 typeCheckingMode = "standard"
